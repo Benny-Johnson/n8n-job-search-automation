@@ -1,0 +1,801 @@
+{
+  "name": "Tracker Append/Update",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "70dcadd1-f7aa-4243-a3c2-e3eed81c7954",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "TRACKER_PENDING",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        176,
+        0
+      ],
+      "id": "adf16173-4cc0-4a7f-86ec-a506c5efe3df",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Loop Over Items').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        720,
+        0
+      ],
+      "id": "331a36a3-ede1-49e2-82db-f89a295bd3f9",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        912,
+        0
+      ],
+      "id": "26223076-ae97-43e3-923c-fc1dbcab5a40",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -144,
+        0
+      ],
+      "id": "a1426a5b-d5f5-46b3-926d-719edf0a4f56",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "returnAll": true,
+        "filter": {
+          "driveId": {
+            "mode": "list",
+            "value": "My Drive"
+          },
+          "folderId": {
+            "__rl": true,
+            "value": "=INBOX_FOLDER_ID",
+            "mode": "id"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        16,
+        0
+      ],
+      "id": "b43e05c6-e1c3-497f-8dd2-bd74e03320ce",
+      "name": "List Inbox",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        528,
+        -144
+      ],
+      "id": "ff97905b-b3c0-43b7-b7e8-3228945f1f93",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=PROCESSING_FOLDER_ID",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        560,
+        96
+      ],
+      "id": "5b278e0a-eb1c-44a0-942e-e2720af1f573",
+      "name": "Claim File",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const HEADERS = [\"ID\",\"Date Applied\",\"Who\",\"Company\",\"Role Title\",\"Location\",\"Track\",\n  \"Posted Range\",\"My Number\",\"Source\",\"Resume Version\",\"Cover Letter\",\"Method\",\"Status\",\n  \"Last Update\",\"Follow-up Due\",\"Follow-up Sent\",\"Contact\",\"Notes\",\"Furthest Stage\"];\nconst KEYS = new Set([...HEADERS, \"Notes+\", \"Allow Duplicate\"]);\n\nconst text = String($input.first().json.data || \"\").replace(/\\r/g, \"\");\nconst lines = text.split(\"\\n\");\n\nconst fields = {};\nlet notesAppend = null;\nlet allowDuplicate = false;\nlet lastKey = null;\nlet keyed = false;\n\nfor (const raw of lines) {\n  const m = raw.match(/^([A-Za-z][A-Za-z0-9 +\\-]*?)\\s*:\\s*(.*)$/);\n  if (m && KEYS.has(m[1].trim())) {\n    keyed = true;\n    const k = m[1].trim();\n    const v = m[2].trim();\n    if (k === \"Notes+\") { notesAppend = v; lastKey = \"Notes+\"; }\n    else if (k === \"Allow Duplicate\") { allowDuplicate = /^y/i.test(v); lastKey = null; }\n    else { fields[k] = v; lastKey = k; }\n  } else if (lastKey && raw.trim() !== \"\") {\n    if (lastKey === \"Notes+\") notesAppend = ((notesAppend || \"\") + \" \" + raw.trim()).trim();\n    else fields[lastKey] = ((fields[lastKey] || \"\") + \" \" + raw.trim()).trim();\n  }\n}\n\nif (!keyed) {\n  const rowLine = lines.find(l => l.includes(\"|\"));\n  if (!rowLine) {\n    return [{ json: { parseError: \"No keyed fields and no pipe row found in this file.\" } }];\n  }\n  const parts = rowLine.split(\"|\").map(s => s.trim());\n  const notesIdx = HEADERS.indexOf(\"Notes\");\n  const extra = parts.length - HEADERS.length;\n  if (extra > 0) {\n    const folded = parts.splice(notesIdx, extra + 1).join(\" | \");\n    parts.splice(notesIdx, 0, folded);\n  }\n  HEADERS.forEach((h, i) => {\n    if (parts[i] !== undefined && parts[i] !== \"\") fields[h] = parts[i];\n  });\n}\n\nfor (const k of Object.keys(fields)) {\n  if (fields[k] === \"\") delete fields[k];\n}\n\nreturn [{ json: {\n  fields,\n  notesAppend,\n  allowDuplicate,\n  fileName: $('Loop Over Items').first().json.name || \"unknown file\"\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "b6101ef2-0acf-42a2-8021-48b4bb88afd5",
+      "name": "Parse Pending File"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "=TRACKER_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 386774566,
+          "mode": "list",
+          "cachedResultName": "Applications",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/TRACKER_SHEET_ID/edit#gid=386774566"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "abe25a4c-0dce-40ab-ad30-dcc18876d83a",
+      "name": "Get Rows",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const HEADERS = [\"ID\",\"Date Applied\",\"Who\",\"Company\",\"Role Title\",\"Location\",\"Track\",\n  \"Posted Range\",\"My Number\",\"Source\",\"Resume Version\",\"Cover Letter\",\"Method\",\"Status\",\n  \"Last Update\",\"Follow-up Due\",\"Follow-up Sent\",\"Contact\",\"Notes\",\"Furthest Stage\"];\n\nconst parsed = $('Parse Pending File').first().json;\nconst rows = $input.all().map(i => i.json);\nconst errors = [];\n\nif (parsed.parseError) {\n  return [{ json: { valid: false, op: \"INVALID\", reason: parsed.parseError,\n    fileName: parsed.fileName, row: {} } }];\n}\n\nconst fields = { ...parsed.fields };\nconst known = new Set(HEADERS);\nfor (const k of Object.keys(fields)) {\n  if (!known.has(k)) errors.push(`Unknown field name \"${k}\".`);\n}\n\nconst idRaw = String(fields.ID || \"\").trim();\nlet op = null;\nlet targetRow = null;\n\nif (idRaw === \"\" || idRaw.toUpperCase() === \"NEW\") {\n  op = \"APPEND\";\n  const ids = rows.map(r => parseInt(r.ID, 10)).filter(n => !isNaN(n));\n  fields.ID = String((ids.length ? Math.max(...ids) : 0) + 1);\n} else {\n  targetRow = rows.find(r => String(r.ID).trim() === idRaw) || null;\n  if (targetRow) {\n    op = \"UPDATE\";\n  } else {\n    op = \"INVALID\";\n    errors.push(`ID ${idRaw} is not on the Applications tab. Refusing to create a row under a supplied ID.`);\n  }\n}\n\nif (op === \"APPEND\") {\n  for (const req of [\"Who\", \"Company\", \"Role Title\", \"Status\"]) {\n    if (!fields[req]) errors.push(`New application is missing ${req}.`);\n  }\n  const key = r => [\"Who\", \"Company\", \"Role Title\"]\n    .map(h => String(r[h] || \"\").trim().toLowerCase()).join(\"::\");\n  const dup = rows.find(r => key(r) === key(fields));\n  if (dup && !parsed.allowDuplicate) {\n    errors.push(`Looks like a duplicate of ID ${dup.ID}. Add a line reading \"Allow Duplicate: yes\" to override.`);\n  }\n}\n\nif (parsed.notesAppend) {\n  const existing = targetRow ? String(targetRow.Notes || \"\").trim() : \"\";\n  fields.Notes = existing ? `${existing} | ${parsed.notesAppend}` : parsed.notesAppend;\n}\n\nfor (const k of Object.keys(fields)) {\n  if (fields[k] === \"CLEAR\") fields[k] = \"\";\n}\n\nreturn [{ json: {\n  valid: errors.length === 0 && op !== \"INVALID\",\n  op,\n  reason: errors.join(\" \"),\n  fileName: parsed.fileName,\n  row: fields\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        0
+      ],
+      "id": "614420ff-b603-45f5-8406-9f8e7e3b2527",
+      "name": "Resolve and Validate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b666263f-02db-4d89-bc34-8bcf1ff0d34e",
+              "leftValue": "={{$json.valid}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "041c68af-778a-410f-9fa6-9c1ef3174012",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $('Resolve and Validate').first().json.row }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        -112
+      ],
+      "id": "597dd39c-46f2-4811-9617-f0c9d8f65c77",
+      "name": "Row Only"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "TRACKER_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 386774566,
+          "mode": "list",
+          "cachedResultName": "Applications",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/TRACKER_SHEET_ID/edit#gid=386774566"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Date Applied",
+              "displayName": "Date Applied",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Who",
+              "displayName": "Who",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Role Title",
+              "displayName": "Role Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Track",
+              "displayName": "Track",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Posted Range",
+              "displayName": "Posted Range",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "My Number",
+              "displayName": "My Number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Resume Version",
+              "displayName": "Resume Version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Cover Letter",
+              "displayName": "Cover Letter",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Method",
+              "displayName": "Method",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Update",
+              "displayName": "Last Update",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Follow-up Due",
+              "displayName": "Follow-up Due",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Follow-up Sent",
+              "displayName": "Follow-up Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Contact",
+              "displayName": "Contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Furthest Stage",
+              "displayName": "Furthest Stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2176,
+        -112
+      ],
+      "id": "f9f910f2-5608-469e-aca6-411707b4bb7e",
+      "name": "Upsert Row",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "you@example.com",
+        "subject": "Tracker automation rejected a file.",
+        "message": "={{ $json.fileName }} {{  $json.reason }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1968,
+        96
+      ],
+      "id": "b531856b-3b4a-435b-bb02-9d12081ba039",
+      "name": "Send a message",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Loop Over Items').item.json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=FAILED_FOLDER_ID",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2144,
+        96
+      ],
+      "id": "d5ac1b7e-192a-4456-a156-4dc1d07ad2ff",
+      "name": "Move to Failed",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Loop Over Items').item.json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=DONE_FOLDER_ID",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2384,
+        112
+      ],
+      "id": "8d3a2ff4-24d9-4486-9e3b-c974fc3d4c2a",
+      "name": "Move to Done",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Parse Pending File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Inbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Inbox": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Claim File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim File": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Pending File": {
+      "main": [
+        [
+          {
+            "node": "Get Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Rows": {
+      "main": [
+        [
+          {
+            "node": "Resolve and Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve and Validate": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Row Only",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Row Only": {
+      "main": [
+        [
+          {
+            "node": "Upsert Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Row": {
+      "main": [
+        [
+          {
+            "node": "Move to Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Move to Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move to Failed": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move to Done": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "rfnM81t8FWtURFQy",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "tags": []
+}

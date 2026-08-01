@@ -1,0 +1,8 @@
+# Unscrubbed n8n exports must never reach this repository.
+# scrub_workflow.py writes the safe copy; the raw export keeps this suffix.
+*-raw.json
+
+# Local scratch
+.DS_Store
+Thumbs.db
+*.tmp

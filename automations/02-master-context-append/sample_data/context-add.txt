@@ -1,0 +1,5 @@
+Section: 13
+Action: ADD
+
+New text:
+Fictional sample entry. It exercises the ADD path, which searches the document for the section anchor token and replaces that token with this paragraph followed by the same token, so the anchor survives and the next ADD still has something to find.

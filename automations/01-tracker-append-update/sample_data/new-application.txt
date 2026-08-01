@@ -1,0 +1,20 @@
+ID: NEW
+Date Applied: 2026-06-02
+Who: Sample Person
+Company: Northwind Logistics
+Role Title: Finance Data Analyst
+Location: Tallinn, Estonia
+Track: Estonia
+Posted Range: Not posted
+My Number: Not asked
+Source: Company careers page
+Resume Version: Finance Data Analyst (tailored)
+Cover Letter: Yes
+Method: Company careers portal
+Status: Applied
+Last Update: 2026-06-02
+Follow-up Due: 2026-06-16
+Follow-up Sent: No
+Contact: A. Sample
+Notes: Fictional file. Exercises the append path. ID is NEW so the workflow reads the sheet and assigns the next number itself.
+Furthest Stage: Application only

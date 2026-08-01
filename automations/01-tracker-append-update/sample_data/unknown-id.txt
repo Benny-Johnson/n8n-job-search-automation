@@ -1,0 +1,4 @@
+ID: 900
+Status: Rejected
+Last Update: 2026-06-18
+Notes+: Fictional file. ID 900 is not on the Applications tab, so this one is refused rather than appended, an alert email goes out, and the file lands in the failed folder.

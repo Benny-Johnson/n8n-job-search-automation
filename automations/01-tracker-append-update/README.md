@@ -56,6 +56,7 @@ Four values behave specially.
 A line that does not begin with a recognised field name is folded into the field above it, so a wrapped line is not a lost line. The consequence is that a continuation line must never itself start with something that looks like `Field: value`.
 
 ## Flow
+![Workflow canvas](assets/canvas.png)
 
 ```text
 Schedule Trigger -> List Inbox -> Filter -> Loop Over Items

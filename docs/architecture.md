@@ -233,7 +233,7 @@ working rule is to prefer ADD, which targets an anchor token known to exist.
 workflow that crashed and prompts a look, but no scheduled check reports a file that
 has been sitting there since yesterday. Closing that properly needs a fourth workflow.
 
-**The Code nodes assume batch size 1.** Three of the four call `$input.first()` or
+**The Code nodes assume batch size 1.** Four of the five call `$input.first()` or
 reach back to a named node with `.first()`. Raising the batch size would not speed
 these workflows up, it would silently process one file per batch.
 

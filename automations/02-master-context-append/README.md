@@ -31,6 +31,7 @@ Four working rules, learned rather than designed.
 **A REPLACE that matches nothing is a silent no-op.** The workflow runs green and writes nothing. The approval email is the only checkpoint that catches it, which is why the email quotes the search string in full.
 
 ## Flow
+![Workflow canvas](assets/canvas.png)
 
 ```text
 Schedule Trigger -> List Inbox -> Filter -> Loop Over Items
